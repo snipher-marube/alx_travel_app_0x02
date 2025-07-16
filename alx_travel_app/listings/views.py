@@ -19,6 +19,12 @@ class BookingViewSet(viewsets.ModelViewSet):
     serializer_class = BookingSerializer
     permission_classes = [permissions.IsAuthenticated]
 
+    def perform_create(self, serializer):
+        booking = serializer.save(user=self.request.user)
+        # Trigger async email task
+        send_booking_confirmation.delay(booking.id)
+        return booking
+
 CHAPA_SECRET_KEY = config('CHAPA_SECRET_KEY')
 CHAPA_BASE_URL = 'https://api.chapa.co/v1/transaction'
 

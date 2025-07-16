@@ -1,26 +1,36 @@
 from celery import shared_task
 from django.core.mail import send_mail
-from django.conf import settings
-from .models import Booking
+from django.template.loader import render_to_string
+from django.utils.html import strip_tags
 
 @shared_task
 def send_booking_confirmation(booking_id):
-    booking = Booking.objects.get(id=booking_id)
-    subject = f'Booking Confirmation #{booking.id}'
-    message = f'''
-    Thank you for your booking!
+    """
+    Sends booking confirmation email asynchronously
+    """
+    from .models import Booking
     
-    Booking Details:
-    - Property: {booking.listing.title}
-    - Dates: {booking.start_date} to {booking.end_date}
-    - Total: {booking.total_price} ETB
-    
-    We look forward to hosting you!
-    '''
-    send_mail(
-        subject,
-        message,
-        settings.EMAIL_HOST_USER,
-        [booking.user.email],
-        fail_silently=False,
-    )
+    try:
+        booking = Booking.objects.get(id=booking_id)
+        user = booking.user
+        listing = booking.listing
+        
+        subject = f'Booking Confirmation for {listing.title}'
+        html_message = render_to_string('emails/booking_confirmation.html', {
+            'user': user,
+            'booking': booking,
+            'listing': listing
+        })
+        plain_message = strip_tags(html_message)
+        
+        send_mail(
+            subject=subject,
+            message=plain_message,
+            from_email=None,  # Uses DEFAULT_FROM_EMAIL
+            recipient_list=[user.email],
+            html_message=html_message,
+            fail_silently=False
+        )
+        return f"Email sent to {user.email}"
+    except Exception as e:
+        return f"Error sending email: {str(e)}"
